@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TIM2026">
+<meta name="theme-color" content="#1a1a2e">
+<title>TIM2026 Check-in</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{--dark:#1a1a2e;--gold:#c9a84c;--success:#27ae60;--danger:#e74c3c;--warn:#e67e22}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--dark);color:#fff;height:100vh;height:100dvh;overflow:hidden;user-select:none}
+
+.screen{display:none;position:fixed;inset:0;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.screen.active{display:flex}
+
+/* MEMBER SELECTION */
+#screen-member{background:var(--dark)}
+.logo{font-size:3rem;margin-bottom:8px}
+.app-title{font-size:1.4rem;font-weight:700;color:var(--gold);margin-bottom:4px}
+.app-sub{font-size:13px;color:#a0a0b0;margin-bottom:32px}
+.member-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:340px}
+.member-btn{background:rgba(255,255,255,0.08);border:1px solid rgba(201,168,76,0.3);color:#fff;border-radius:12px;padding:16px 12px;font-size:15px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center}
+.member-btn:active{background:rgba(201,168,76,0.2);border-color:var(--gold);transform:scale(0.97)}
+
+/* SCANNER */
+#screen-scanner{background:#000;padding:0}
+.scanner-header{position:absolute;top:0;left:0;right:0;z-index:10;padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));background:linear-gradient(to bottom,rgba(0,0,0,0.85),transparent);display:flex;align-items:center;justify-content:space-between}
+.scanner-member{font-size:13px;color:var(--gold);font-weight:600}
+.scanner-stats{font-size:12px;color:#a0a0b0}
+.scanner-stats span{color:#fff;font-weight:600}
+#video{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.scan-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.scan-frame{width:220px;height:220px;position:relative}
+.scan-frame::before,.scan-frame::after{content:'';position:absolute;width:44px;height:44px;border-color:var(--gold);border-style:solid}
+.scan-frame::before{top:0;left:0;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
+.scan-frame::after{bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
+.scan-corner{position:absolute;width:44px;height:44px;border-color:var(--gold);border-style:solid}
+.scan-corner.tr{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 4px 0 0}
+.scan-corner.bl{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 4px}
+.scan-line{position:absolute;left:4px;right:4px;height:2px;background:linear-gradient(to right,transparent,var(--gold),transparent);animation:scanline 2s ease-in-out infinite;top:50%}
+@keyframes scanline{0%,100%{top:10%;opacity:0}10%{opacity:1}90%{opacity:1}50%{top:90%}}
+.scanner-footer{position:absolute;bottom:0;left:0;right:0;z-index:10;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));background:linear-gradient(to top,rgba(0,0,0,0.8),transparent);display:flex;justify-content:space-between;align-items:center}
+.scan-hint{font-size:12px;color:#a0a0b0;text-align:center;flex:1}
+.footer-btn{font-size:12px;color:var(--gold);background:none;border:none;cursor:pointer;padding:4px 8px;white-space:nowrap}
+
+/* RESULT OVERLAY */
+#result-overlay{position:absolute;inset:0;z-index:20;display:none;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+#result-overlay.show{display:flex}
+#result-overlay.valid{background:rgba(39,174,96,0.96)}
+#result-overlay.invalid{background:rgba(231,76,60,0.96)}
+#result-overlay.warning{background:rgba(230,126,34,0.96)}
+.result-icon{font-size:5rem;margin-bottom:12px;animation:popIn .3s ease}
+@keyframes popIn{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.result-title{font-size:1.8rem;font-weight:700;margin-bottom:16px}
+.result-info{background:rgba(0,0,0,0.2);border-radius:12px;padding:16px;width:100%;max-width:320px;margin-bottom:12px}
+.result-row{display:flex;justify-content:space-between;padding:7px 0;font-size:15px}
+.result-row:not(:last-child){border-bottom:1px solid rgba(255,255,255,0.15)}
+.result-row label{opacity:.8}
+.result-row strong{font-weight:700;text-align:right;max-width:60%}
+.result-stats{font-size:13px;opacity:.85;text-align:center;margin-bottom:12px}
+.result-timer{width:100%;max-width:320px;height:4px;background:rgba(255,255,255,0.3);border-radius:2px;overflow:hidden}
+.result-timer-bar{height:100%;background:rgba(255,255,255,0.85);border-radius:2px;transition:width linear}
+
+/* MANUAL INPUT */
+#screen-manual{background:var(--dark)}
+.manual-title{font-size:1.2rem;font-weight:700;color:var(--gold);margin-bottom:8px}
+.manual-sub{font-size:13px;color:#a0a0b0;margin-bottom:24px;text-align:center}
+.manual-input{width:100%;max-width:300px;background:rgba(255,255,255,0.08);border:2px solid rgba(201,168,76,0.4);border-radius:12px;padding:16px;font-size:1.2rem;font-family:monospace;text-align:center;color:#fff;outline:none;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px}
+.manual-input:focus{border-color:var(--gold)}
+.manual-btn{width:100%;max-width:300px;background:var(--gold);color:var(--dark);border:none;border-radius:12px;padding:16px;font-size:16px;font-weight:700;cursor:pointer;margin-bottom:12px}
+.back-btn{font-size:14px;color:#a0a0b0;background:none;border:none;cursor:pointer;padding:8px}
+
+/* LOADING */
+.loading{position:fixed;inset:0;background:var(--dark);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+.loading.hide{display:none}
+.spinner{width:40px;height:40px;border:3px solid rgba(201,168,76,0.3);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin-bottom:16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading p{color:#a0a0b0;font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <p>Loading check-in app...</p>
+</div>
+
+<!-- MEMBER SELECTION -->
+<div id="screen-member" class="screen">
+  <div class="logo">&#128167;</div>
+  <div class="app-title">TIM2026 Check-in</div>
+  <div class="app-sub">Who are you?</div>
+  <div class="member-grid" id="member-grid"></div>
+</div>
+
+<!-- SCANNER -->
+<div id="screen-scanner" class="screen">
+  <video id="video" autoplay playsinline muted></video>
+  <div class="scanner-header">
+    <div class="scanner-member" id="scanner-member-name"></div>
+    <div class="scanner-stats">
+      <span id="stat-checkedin">0</span>/<span id="stat-total">0</span> tickets in
+    </div>
+  </div>
+  <div class="scan-overlay">
+    <div class="scan-frame">
+      <div class="scan-corner tr"></div>
+      <div class="scan-corner bl"></div>
+      <div class="scan-line"></div>
+    </div>
+  </div>
+  <div class="scanner-footer">
+    <button class="footer-btn" onclick="showManual()">&#9000; Manual</button>
+    <div class="scan-hint">Point at QR code</div>
+    <button class="footer-btn" onclick="switchMember()">Switch &#8594;</button>
+  </div>
+  <div id="result-overlay">
+    <div class="result-icon" id="result-icon"></div>
+    <div class="result-title" id="result-title"></div>
+    <div class="result-info" id="result-info"></div>
+    <div class="result-stats" id="result-stats"></div>
+    <div class="result-timer"><div class="result-timer-bar" id="result-timer-bar"></div></div>
+  </div>
+</div>
+
+<!-- MANUAL INPUT -->
+<div id="screen-manual" class="screen">
+  <div class="manual-title">&#9000; Enter Ticket Ref</div>
+  <div class="manual-sub">Type the TIM reference number</div>
+  <input type="text" class="manual-input" id="manual-ref" placeholder="TIM-00000" maxlength="10">
+  <button class="manual-btn" onclick="manualCheckin()">Check Ticket</button>
+  <button class="back-btn" onclick="showScanner()">&#8592; Back to Scanner</button>
+</div>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyNp70rlg78u0KBYtRPbY1g7_VHWJKaHY7CY8D76dBjkO-WZwMDrbMm1YL3sYgqKU6f/exec";
+const TEAM    = ["Shin", "Soe Min Thant", "Luu", "Pyi Kyaw Han", "KMT", "Page"];
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let currentMember  = null;
+let scanning       = false;
+let videoStream    = null;
+let barcodeDetector = null;
+let scanLoop       = null;
+let resultTimeout  = null;
+let lastRef        = null;
+let lastRefTime    = 0;
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+window.addEventListener("load", () => {
+  // Build member buttons
+  const grid = document.getElementById("member-grid");
+  TEAM.forEach(name => {
+    const btn = document.createElement("button");
+    btn.className = "member-btn";
+    btn.textContent = name;
+    btn.onclick = () => selectMember(name);
+    grid.appendChild(btn);
+  });
+
+  // Init BarcodeDetector
+  if ("BarcodeDetector" in window) {
+    barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
+  }
+
+  document.getElementById("loading").classList.add("hide");
+  showScreen("screen-member");
+});
+
+// ── MEMBER ───────────────────────────────────────────────────────────────────
+function selectMember(name) {
+  currentMember = name;
+  document.getElementById("scanner-member-name").textContent = "👤 " + name;
+  showScanner();
+  loadStats();
+}
+
+function switchMember() {
+  stopCamera();
+  showScreen("screen-member");
+}
+
+// ── SCREENS ──────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function showScanner() {
+  showScreen("screen-scanner");
+  hideResult();
+  startCamera();
+}
+
+function showManual() {
+  stopCamera();
+  showScreen("screen-manual");
+  document.getElementById("manual-ref").value = "";
+  setTimeout(() => document.getElementById("manual-ref").focus(), 300);
+}
+
+// ── CAMERA ───────────────────────────────────────────────────────────────────
+async function startCamera() {
+  if (scanning) return;
+  try {
+    videoStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const video = document.getElementById("video");
+    video.srcObject = videoStream;
+    await video.play();
+    scanning = true;
+    startScanLoop();
+  } catch(err) {
+    alert("Camera access denied.\n\nOn iPhone: Settings → Safari → Camera → Allow\n\nThen refresh this page.");
+  }
+}
+
+function stopCamera() {
+  scanning = false;
+  if (scanLoop) { cancelAnimationFrame(scanLoop); scanLoop = null; }
+  if (videoStream) { videoStream.getTracks().forEach(t => t.stop()); videoStream = null; }
+}
+
+function startScanLoop() {
+  const video  = document.getElementById("video");
+  const canvas = document.createElement("canvas");
+  const ctx    = canvas.getContext("2d", { willReadFrequently: true });
+  let lastScan = 0;
+
+  function loop(ts) {
+    if (!scanning) return;
+    scanLoop = requestAnimationFrame(loop);
+
+    // Scan every 300ms
+    if (ts - lastScan < 300) return;
+    lastScan = ts;
+
+    if (video.readyState !== 4 || video.videoWidth === 0) return;
+
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    if (barcodeDetector) {
+      barcodeDetector.detect(canvas).then(codes => {
+        if (codes.length > 0) processQR(codes[0].rawValue);
+      }).catch(() => {});
+    }
+  }
+
+  scanLoop = requestAnimationFrame(loop);
+}
+
+// ── QR PROCESSING ────────────────────────────────────────────────────────────
+function processQR(raw) {
+  let ref = raw.trim();
+
+  // Extract ref from URL if QR contains a URL
+  try {
+    const url = new URL(raw);
+    ref = url.searchParams.get("ref") || raw;
+  } catch(e) {}
+
+  ref = ref.toUpperCase();
+  if (!ref.startsWith("TIM-")) return;
+
+  // Debounce same ref within 5 seconds
+  const now = Date.now();
+  if (ref === lastRef && now - lastRefTime < 5000) return;
+  lastRef     = ref;
+  lastRefTime = now;
+
+  performCheckin(ref);
+}
+
+// ── CHECK-IN ─────────────────────────────────────────────────────────────────
+async function performCheckin(ref) {
+  scanning = false;
+  try {
+    const url = GAS_URL + "?action=checkin&ref=" + encodeURIComponent(ref) + "&member=" + encodeURIComponent(currentMember);
+    const res  = await fetch(url);
+    const data = await res.json();
+    showResult(data);
+  } catch(e) {
+    showResultError("Network error. Check connection.");
+  }
+}
+
+async function manualCheckin() {
+  const ref = document.getElementById("manual-ref").value.trim().toUpperCase();
+  if (!ref) { alert("Please enter a ticket reference."); return; }
+  showScreen("screen-scanner");
+  await performCheckin(ref);
+}
+
+// ── RESULT ───────────────────────────────────────────────────────────────────
+function showResult(data) {
+  const overlay  = document.getElementById("result-overlay");
+  const icon     = document.getElementById("result-icon");
+  const title    = document.getElementById("result-title");
+  const info     = document.getElementById("result-info");
+  const statsEl  = document.getElementById("result-stats");
+  const timerBar = document.getElementById("result-timer-bar");
+
+  overlay.className = "show";
+
+  if (data.valid) {
+    overlay.classList.add("valid");
+    icon.textContent  = "✅";
+    title.textContent = "Valid Ticket!";
+    info.innerHTML = row("Name", data.name) + row("Tickets", data.qty) + row("Payment", data.payment) + row("Ref", data.ref);
+    playBeep(true);
+  } else if (data.reason === "already_used") {
+    overlay.classList.add("invalid");
+    icon.textContent  = "🚫";
+    title.textContent = "Already Used!";
+    info.innerHTML = row("Name", data.name) + row("Scanned at", data.checkinTime) + row("Scanned by", data.checkinBy);
+    playBeep(false);
+  } else {
+    overlay.classList.add("warning");
+    icon.textContent  = "❓";
+    title.textContent = "Not Found";
+    info.innerHTML = row("Ref", data.ref || "Unknown");
+    playBeep(false);
+  }
+
+  if (data.stats) {
+    statsEl.textContent = data.stats.checkedInTickets + "/" + data.stats.totalTickets + " tickets · " + data.stats.checkedIn + "/" + data.stats.totalBookings + " bookings checked in";
+    updateStats(data.stats);
+  }
+
+  // Timer bar
+  const duration = 2500;
+  timerBar.style.transition = "none";
+  timerBar.style.width = "100%";
+  setTimeout(() => {
+    timerBar.style.transition = "width " + duration + "ms linear";
+    timerBar.style.width = "0%";
+  }, 50);
+
+  if (resultTimeout) clearTimeout(resultTimeout);
+  resultTimeout = setTimeout(() => {
+    hideResult();
+    lastRef  = null;
+    scanning = true;
+    startScanLoop();
+  }, duration);
+}
+
+function row(label, value) {
+  return '<div class="result-row"><label>' + label + '</label><strong>' + (value || "—") + '</strong></div>';
+}
+
+function showResultError(msg) {
+  const overlay = document.getElementById("result-overlay");
+  overlay.className = "show warning";
+  document.getElementById("result-icon").textContent  = "⚠️";
+  document.getElementById("result-title").textContent = "Error";
+  document.getElementById("result-info").innerHTML    = row("", msg);
+  document.getElementById("result-stats").textContent = "";
+  if (resultTimeout) clearTimeout(resultTimeout);
+  resultTimeout = setTimeout(() => { hideResult(); scanning = true; startScanLoop(); }, 3000);
+}
+
+function hideResult() {
+  document.getElementById("result-overlay").className = "";
+}
+
+// ── STATS ────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res  = await fetch(GAS_URL + "?action=stats");
+    const data = await res.json();
+    updateStats(data);
+  } catch(e) {}
+}
+
+function updateStats(s) {
+  document.getElementById("stat-checkedin").textContent = s.checkedInTickets || 0;
+  document.getElementById("stat-total").textContent     = s.totalTickets || 0;
+}
+
+// ── BEEP ─────────────────────────────────────────────────────────────────────
+function playBeep(valid) {
+  try {
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = valid ? 880 : 300;
+    osc.type = valid ? "sine" : "square";
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+// ── KEYBOARD ─────────────────────────────────────────────────────────────────
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && document.getElementById("screen-manual").classList.contains("active")) {
+    manualCheckin();
+  }
+});
+</script>
+</body>
+</html>

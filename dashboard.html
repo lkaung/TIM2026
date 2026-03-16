@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1a1a2e">
+<title>TIM2026 Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--dark:#1a1a2e;--surface:#16213e;--gold:#c9a84c;--gold-light:#f0d080;--text:#f0f0f0;--muted:#a0a0b0;--success:#2ecc71;--warn:#f39c12;--accent:#e94560;--water:#4fc3f7}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--dark);color:var(--text);min-height:100vh}
+.nav{background:var(--surface);border-bottom:1px solid rgba(201,168,76,0.3);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.nav-logo{font-size:1.1rem;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:8px}
+.nav-logo span{font-size:1.4rem}
+.nav-right{display:flex;align-items:center;gap:12px}
+.refresh-btn{background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:var(--gold);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
+.refresh-btn:hover{background:rgba(201,168,76,0.25)}
+.last-updated{font-size:12px;color:var(--muted)}
+.container{max-width:1100px;margin:0 auto;padding:1.5rem}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:1.5rem}
+.stat-card{background:var(--surface);border:1px solid rgba(201,168,76,0.15);border-radius:12px;padding:1.25rem}
+.stat-label{font-size:12px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.stat-val{font-size:2rem;font-weight:700;color:var(--gold);line-height:1}
+.stat-sub{font-size:12px;color:var(--muted);margin-top:6px}
+.stat-card.green .stat-val{color:var(--success)}
+.stat-card.red .stat-val{color:var(--accent)}
+.stat-card.blue .stat-val{color:var(--water)}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:1.5rem}
+.chart-card{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1.25rem}
+.chart-title{font-size:14px;font-weight:600;color:var(--gold-light);margin-bottom:1rem}
+.chart-wrap{position:relative;height:220px}
+.table-card{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem}
+.table-title{font-size:14px;font-weight:600;color:var(--gold-light);margin-bottom:1rem}
+.data-table{width:100%;border-collapse:collapse;font-size:14px}
+.data-table th{padding:8px 12px;text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(255,255,255,0.06)}
+.data-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(255,255,255,0.02)}
+.badge{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600}
+.badge-paid{background:rgba(46,204,113,0.15);color:var(--success)}
+.badge-unpaid{background:rgba(243,156,18,0.15);color:var(--warn)}
+.loader-wrap{display:flex;align-items:center;justify-content:center;min-height:60vh;flex-direction:column;gap:16px}
+.spinner{width:40px;height:40px;border:3px solid rgba(201,168,76,0.3);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-wrap p{color:var(--muted);font-size:14px}
+.error-wrap{display:none;text-align:center;padding:3rem;color:var(--accent)}
+.progress-bar{height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.progress-fill.gold{background:var(--gold)}
+.progress-fill.green{background:var(--success)}
+.member-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.member-row:last-child{border-bottom:none}
+.member-name{font-size:14px;font-weight:500}
+.member-count{font-size:13px;color:var(--muted)}
+.member-tickets{font-size:15px;font-weight:700;color:var(--gold)}
+@media(max-width:600px){
+  .charts-row{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-logo"><span>&#128167;</span> TIM2026 Dashboard</div>
+  <div class="nav-right">
+    <span class="last-updated" id="last-updated">—</span>
+    <button class="refresh-btn" onclick="loadData()">&#8635; Refresh</button>
+  </div>
+</nav>
+
+<div id="loader" class="loader-wrap">
+  <div class="spinner"></div>
+  <p>Loading dashboard...</p>
+</div>
+
+<div id="error" class="error-wrap">
+  <p style="font-size:2rem;margin-bottom:1rem">&#9888;</p>
+  <p id="error-msg">Could not load data.</p>
+  <button class="refresh-btn" style="margin-top:1rem" onclick="loadData()">Try Again</button>
+</div>
+
+<div id="dashboard" style="display:none">
+  <div class="container">
+
+    <!-- STAT CARDS -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Tickets Sold</div>
+        <div class="stat-val" id="stat-tickets">—</div>
+        <div class="stat-sub" id="stat-tickets-sub">—</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-val" id="stat-revenue">—</div>
+        <div class="stat-sub" id="stat-revenue-sub">—</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Paid Bookings</div>
+        <div class="stat-val" id="stat-paid">—</div>
+        <div class="stat-sub" id="stat-paid-sub">—</div>
+        <div class="progress-bar"><div class="progress-fill green" id="paid-bar" style="width:0%"></div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Unpaid Bookings</div>
+        <div class="stat-val" id="stat-unpaid">—</div>
+        <div class="stat-sub" id="stat-unpaid-sub">—</div>
+        <div class="progress-bar"><div class="progress-fill gold" id="unpaid-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Daily Ticket Sales</div>
+        <div class="chart-wrap"><canvas id="dailyChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Payment Status Breakdown</div>
+        <div class="chart-wrap"><canvas id="paymentChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TEAM LEADERBOARD -->
+    <div class="table-card">
+      <div class="table-title">&#127942; Team Leaderboard — Tickets Sold</div>
+      <div id="leaderboard"></div>
+    </div>
+
+    <!-- RECENT ORDERS -->
+    <div class="table-card">
+      <div class="table-title">Recent Bookings</div>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Name</th>
+              <th>Tickets</th>
+              <th>Payment</th>
+              <th>Accepted by</th>
+              <th>Refs</th>
+            </tr>
+          </thead>
+          <tbody id="orders-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyNp70rlg78u0KBYtRPbY1g7_VHWJKaHY7CY8D76dBjkO-WZwMDrbMm1YL3sYgqKU6f/exec";
+
+let dailyChartInst   = null;
+let paymentChartInst = null;
+
+async function loadData() {
+  document.getElementById("loader").style.display    = "flex";
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("error").style.display     = "none";
+
+  try {
+    const res  = await fetch(GAS_URL + "?action=dashboard");
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderDashboard(data);
+    document.getElementById("loader").style.display    = "none";
+    document.getElementById("dashboard").style.display = "block";
+    document.getElementById("last-updated").textContent = "Updated " + new Date().toLocaleTimeString("en-AU");
+  } catch(e) {
+    document.getElementById("loader").style.display = "none";
+    document.getElementById("error").style.display  = "block";
+    document.getElementById("error-msg").textContent = "Error: " + e.message;
+  }
+}
+
+function renderDashboard(d) {
+  // Stat cards
+  document.getElementById("stat-tickets").textContent     = d.totalTickets;
+  document.getElementById("stat-tickets-sub").textContent = d.totalBookings + " bookings";
+  document.getElementById("stat-revenue").textContent     = "A$" + Number(d.totalRevenue).toLocaleString("en-AU", { minimumFractionDigits: 2 });
+  document.getElementById("stat-revenue-sub").textContent = "Paid bookings only";
+  document.getElementById("stat-paid").textContent        = d.paidBookings;
+  document.getElementById("stat-paid-sub").textContent    = d.paidTickets + " tickets";
+  document.getElementById("stat-unpaid").textContent      = d.unpaidBookings;
+  document.getElementById("stat-unpaid-sub").textContent  = d.unpaidTickets + " tickets";
+
+  const total = d.paidBookings + d.unpaidBookings || 1;
+  document.getElementById("paid-bar").style.width   = (d.paidBookings / total * 100) + "%";
+  document.getElementById("unpaid-bar").style.width = (d.unpaidBookings / total * 100) + "%";
+
+  // Daily chart
+  if (dailyChartInst) dailyChartInst.destroy();
+  dailyChartInst = new Chart(document.getElementById("dailyChart"), {
+    type: "bar",
+    data: {
+      labels: d.dailyLabels,
+      datasets: [{
+        label: "Tickets",
+        data: d.dailyTickets,
+        backgroundColor: "rgba(201,168,76,0.6)",
+        borderColor: "#c9a84c",
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#a0a0b0", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.05)" } },
+        y: { ticks: { color: "#a0a0b0", font: { size: 11 } }, grid: { color: "rgba(255,255,255,0.05)" }, beginAtZero: true }
+      }
+    }
+  });
+
+  // Payment chart
+  if (paymentChartInst) paymentChartInst.destroy();
+  paymentChartInst = new Chart(document.getElementById("paymentChart"), {
+    type: "doughnut",
+    data: {
+      labels: ["Paid", "Unpaid"],
+      datasets: [{
+        data: [d.paidTickets, d.unpaidTickets],
+        backgroundColor: ["rgba(46,204,113,0.7)", "rgba(243,156,18,0.7)"],
+        borderColor: ["#2ecc71", "#f39c12"],
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "bottom", labels: { color: "#a0a0b0", font: { size: 12 }, padding: 16 } }
+      },
+      cutout: "65%"
+    }
+  });
+
+  // Leaderboard
+  const lb = document.getElementById("leaderboard");
+  if (!d.teamStats || !d.teamStats.length) {
+    lb.innerHTML = '<p style="color:var(--muted);font-size:14px;padding:1rem 0">No data yet</p>';
+  } else {
+    const max = Math.max(...d.teamStats.map(t => t.tickets));
+    lb.innerHTML = d.teamStats.map((t, i) => `
+      <div class="member-row">
+        <div>
+          <div class="member-name">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  "} ${t.name}</div>
+          <div class="member-count">${t.bookings} booking${t.bookings !== 1 ? "s" : ""}</div>
+          <div class="progress-bar" style="margin-top:6px;width:200px"><div class="progress-fill gold" style="width:${max ? t.tickets/max*100 : 0}%"></div></div>
+        </div>
+        <div class="member-tickets">${t.tickets} tickets</div>
+      </div>
+    `).join("");
+  }
+
+  // Orders table
+  const tbody = document.getElementById("orders-table");
+  if (!d.orders || !d.orders.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No bookings yet</td></tr>';
+  } else {
+    tbody.innerHTML = d.orders.slice(0, 20).map(o => `
+      <tr>
+        <td style="color:var(--muted);font-size:12px;white-space:nowrap">${o.timestamp}</td>
+        <td style="font-weight:500">${o.name}</td>
+        <td>${o.qty}</td>
+        <td><span class="badge badge-${o.payment === "PAID" ? "paid" : "unpaid"}">${o.payment}</span></td>
+        <td style="color:var(--muted)">${o.acceptedBy}</td>
+        <td style="font-family:monospace;font-size:11px;color:var(--muted)">${o.refs ? o.refs.split(",")[0] + (o.refs.split(",").length > 1 ? " +" + (o.refs.split(",").length - 1) : "") : "—"}</td>
+      </tr>
+    `).join("");
+  }
+}
+
+// Auto refresh every 60 seconds
+setInterval(loadData, 60000);
+loadData();
+</script>
+</body>
+</html>

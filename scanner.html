@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="TIM2026">
 <meta name="theme-color" content="#1a1a2e">
 <title>TIM2026 Check-in</title>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--dark:#1a1a2e;--gold:#c9a84c;--success:#27ae60;--danger:#e74c3c;--warn:#e67e22}
@@ -100,6 +101,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <!-- SCANNER -->
 <div id="screen-scanner" class="screen">
   <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas" style="display:none"></canvas>
   <div class="scanner-header">
     <div class="scanner-member" id="scanner-member-name"></div>
     <div class="scanner-stats">
@@ -145,7 +147,6 @@ const TEAM    = ["Shin", "Soe Min Thant", "Luu", "Pyi Kyaw Han", "KMT", "Page"];
 let currentMember  = null;
 let scanning       = false;
 let videoStream    = null;
-let barcodeDetector = null;
 let scanLoop       = null;
 let resultTimeout  = null;
 let lastRef        = null;
@@ -163,10 +164,7 @@ window.addEventListener("load", () => {
     grid.appendChild(btn);
   });
 
-  // Init BarcodeDetector
-  if ("BarcodeDetector" in window) {
-    barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
-  }
+  // jsQR handles all devices
 
   document.getElementById("loading").classList.add("hide");
   showScreen("screen-member");
@@ -229,29 +227,21 @@ function stopCamera() {
 
 function startScanLoop() {
   const video  = document.getElementById("video");
-  const canvas = document.createElement("canvas");
+  const canvas = document.getElementById("canvas");
   const ctx    = canvas.getContext("2d", { willReadFrequently: true });
-  let lastScan = 0;
 
-  function loop(ts) {
+  function loop() {
     if (!scanning) return;
     scanLoop = requestAnimationFrame(loop);
-
-    // Scan every 300ms
-    if (ts - lastScan < 300) return;
-    lastScan = ts;
-
-    if (video.readyState !== 4 || video.videoWidth === 0) return;
-
+    if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
     canvas.width  = video.videoWidth;
     canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
-
-    if (barcodeDetector) {
-      barcodeDetector.detect(canvas).then(codes => {
-        if (codes.length > 0) processQR(codes[0].rawValue);
-      }).catch(() => {});
-    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+      inversionAttempts: "dontInvert"
+    });
+    if (code) processQR(code.data);
   }
 
   scanLoop = requestAnimationFrame(loop);

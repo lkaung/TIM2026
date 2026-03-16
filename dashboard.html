@@ -110,6 +110,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
 
+    <!-- CHECK-IN PROGRESS -->
+    <div class="table-card" style="margin-bottom:1.5rem">
+      <div class="table-title">&#128203; Check-in Progress</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:1.25rem">
+        <div style="text-align:center;background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.2);border-radius:10px;padding:1rem">
+          <div style="font-size:2rem;font-weight:700;color:var(--success)" id="ci-scanned">—</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Scanned</div>
+        </div>
+        <div style="text-align:center;background:rgba(243,156,18,0.08);border:1px solid rgba(243,156,18,0.2);border-radius:10px;padding:1rem">
+          <div style="font-size:2rem;font-weight:700;color:var(--warn)" id="ci-remaining">—</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Remaining</div>
+        </div>
+        <div style="text-align:center;background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.2);border-radius:10px;padding:1rem">
+          <div style="font-size:2rem;font-weight:700;color:var(--water)" id="ci-percent">—</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Complete</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
+        <span>Check-in progress</span>
+        <span id="ci-label">0 / 0 tickets</span>
+      </div>
+      <div class="progress-bar" style="height:10px;border-radius:5px">
+        <div class="progress-fill green" id="ci-bar" style="width:0%;border-radius:5px"></div>
+      </div>
+    </div>
+
     <!-- CHARTS ROW -->
     <div class="charts-row">
       <div class="chart-card">
@@ -163,9 +189,16 @@ async function loadData() {
   document.getElementById("error").style.display     = "none";
 
   try {
-    const res  = await fetch(GAS_URL + "?action=dashboard");
+    const [dashRes, statsRes] = await Promise.all([
+      fetch(GAS_URL + "?action=dashboard"),
+      fetch(GAS_URL + "?action=stats")
+    ]);
+    const statsData = await statsRes.json();
+    const res = dashRes;
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    data.checkedInTickets = statsData.checkedInTickets || 0;
+    data.totalTickets     = statsData.totalTickets || 0;
     renderDashboard(data);
     document.getElementById("loader").style.display    = "none";
     document.getElementById("dashboard").style.display = "block";
@@ -191,6 +224,17 @@ function renderDashboard(d) {
   const total = d.paidBookings + d.unpaidBookings || 1;
   document.getElementById("paid-bar").style.width   = (d.paidBookings / total * 100) + "%";
   document.getElementById("unpaid-bar").style.width = (d.unpaidBookings / total * 100) + "%";
+
+  // Check-in progress
+  const scanned   = d.checkedInTickets || 0;
+  const totalTix  = d.totalTickets || 0;
+  const remaining = totalTix - scanned;
+  const percent   = totalTix > 0 ? Math.round(scanned / totalTix * 100) : 0;
+  document.getElementById("ci-scanned").textContent   = scanned;
+  document.getElementById("ci-remaining").textContent = remaining;
+  document.getElementById("ci-percent").textContent   = percent + "%";
+  document.getElementById("ci-label").textContent     = scanned + " / " + totalTix + " tickets";
+  document.getElementById("ci-bar").style.width       = percent + "%";
 
   // Daily chart
   if (dailyChartInst) dailyChartInst.destroy();
